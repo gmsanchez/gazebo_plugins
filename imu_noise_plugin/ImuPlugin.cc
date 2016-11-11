@@ -1,3 +1,4 @@
+#include <boost/algorithm/string.hpp>
 #include "ImuPlugin.hh"
 #include "gazebo/transport/transport.hh"
 
@@ -51,8 +52,12 @@ void ImuPlugin::Load(sensors::SensorPtr _sensor, sdf::ElementPtr _sdf)
   //node_noisy->Init();
   node = transport::NodePtr(new transport::Node());
   node->Init();
-  imuPubNoisy = node->Advertise<msgs::IMU>("~/imu_plugin/noisy");
-  imuPubTrue = node->Advertise<msgs::IMU>("~/imu_plugin/true");
+  std::string topicName = "~/";
+  topicName += this->parentSensor->ParentName() + "/" + this->parentSensor->Name(); // + "/imu";
+  boost::replace_all(topicName, "::", "/");
+
+  imuPubNoisy = node->Advertise<msgs::IMU>(topicName + "/imu_plugin_noisy");
+  imuPubTrue = node->Advertise<msgs::IMU>(topicName + "/imu_plugin_true");
 
   // Get the imu element pointer
   sdf::ElementPtr imuElem = _sdf->GetElement("imu");
@@ -159,10 +164,11 @@ void ImuPlugin::Load(sensors::SensorPtr _sensor, sdf::ElementPtr _sdf)
 /////////////////////////////////////////////////
 void ImuPlugin::OnUpdate()
 {
+  /*
   ignition::math::Vector3d 	true_acceleration, noisy_acceleration;
   true_acceleration = this->parentSensor->LinearAcceleration(true);
   noisy_acceleration = this->parentSensor->LinearAcceleration(false);
-  /*
+
   std::cout << "Linear Acceleration without noise:";
   for (unsigned int i = 0; i < 3; ++i)
   {
@@ -176,12 +182,11 @@ void ImuPlugin::OnUpdate()
     std::cout << noisy_acceleration[i] << " ";
   }
   std::cout << "\n";
-  */
 
   ignition::math::Vector3d 	true_velocity, noisy_velocity;
   true_velocity = this->parentSensor->AngularVelocity(true);
   noisy_velocity = this->parentSensor->AngularVelocity(false);
-  /*
+
   std::cout << "Angular Velocity without noise:";
   for (unsigned int i = 0; i < 3; ++i)
   {
@@ -196,6 +201,7 @@ void ImuPlugin::OnUpdate()
   }
   std::cout << "\n";
   */
+
   // Apply noise models
   msgs::IMU msg1;
   msgs::Set(msg1.mutable_stamp(), this->parentSensor->LastMeasurementTime());
@@ -203,58 +209,51 @@ void ImuPlugin::OnUpdate()
   msgs::Set(msg1.mutable_orientation(), this->parentSensor->Orientation());
   msgs::Set(msg1.mutable_angular_velocity(), this->parentSensor->AngularVelocity(false));
   msgs::Set(msg1.mutable_linear_acceleration(), this->parentSensor->LinearAcceleration(false));
-  
-    for (auto const &keyNoise : this->noises)
-    {
-      switch (keyNoise.first)
-      {
-        case sensors::IMU_ANGVEL_X_NOISE_RADIANS_PER_S:
-          msg1.mutable_angular_velocity()->set_x(
-            keyNoise.second->Apply(
-              msg1.angular_velocity().x()));
-          break;
-        case sensors::IMU_ANGVEL_Y_NOISE_RADIANS_PER_S:
-          msg1.mutable_angular_velocity()->set_y(
-            keyNoise.second->Apply(
-              msg1.angular_velocity().y()));
-          break;
-        case sensors::IMU_ANGVEL_Z_NOISE_RADIANS_PER_S:
-          msg1.mutable_angular_velocity()->set_z(
-            keyNoise.second->Apply(
-              msg1.angular_velocity().z()));
-          break;
-        case sensors::IMU_LINACC_X_NOISE_METERS_PER_S_SQR:
-          msg1.mutable_linear_acceleration()->set_x(
-            keyNoise.second->Apply(
-              msg1.linear_acceleration().x()));
-          break;
-        case sensors::IMU_LINACC_Y_NOISE_METERS_PER_S_SQR:
-          msg1.mutable_linear_acceleration()->set_y(
-            keyNoise.second->Apply(
-              msg1.linear_acceleration().y()));
-          break;
-        case sensors::IMU_LINACC_Z_NOISE_METERS_PER_S_SQR:
-          msg1.mutable_linear_acceleration()->set_z(
-            keyNoise.second->Apply(
-              msg1.linear_acceleration().z()));
-          break;
-        default:
-          std::ostringstream out;
-          out << "Removing unrecognized noise model: ";
-          keyNoise.second->Print(out);
-          out << std::endl;
-          gzwarn << out.str() << std::endl;
-          this->noises.erase(keyNoise.first);
-          break;
-      }
-    }
 
-  //msgs::IMU msg1;
-  //msgs::Set(msg1.mutable_stamp(), this->parentSensor->LastMeasurementTime());
-  //msg1.set_entity_name(this->parentSensor->ParentName());
-  //msgs::Set(msg1.mutable_orientation(), this->parentSensor->Orientation());
-  //msgs::Set(msg1.mutable_angular_velocity(), this->parentSensor->AngularVelocity(false));
-  //msgs::Set(msg1.mutable_linear_acceleration(), this->parentSensor->LinearAcceleration(false));
+  for (auto const &keyNoise : this->noises)
+  {
+    switch (keyNoise.first)
+    {
+      case sensors::IMU_ANGVEL_X_NOISE_RADIANS_PER_S:
+        msg1.mutable_angular_velocity()->set_x(
+          keyNoise.second->Apply(
+            msg1.angular_velocity().x()));
+        break;
+      case sensors::IMU_ANGVEL_Y_NOISE_RADIANS_PER_S:
+        msg1.mutable_angular_velocity()->set_y(
+          keyNoise.second->Apply(
+            msg1.angular_velocity().y()));
+        break;
+      case sensors::IMU_ANGVEL_Z_NOISE_RADIANS_PER_S:
+        msg1.mutable_angular_velocity()->set_z(
+          keyNoise.second->Apply(
+            msg1.angular_velocity().z()));
+        break;
+      case sensors::IMU_LINACC_X_NOISE_METERS_PER_S_SQR:
+        msg1.mutable_linear_acceleration()->set_x(
+          keyNoise.second->Apply(
+            msg1.linear_acceleration().x()));
+        break;
+      case sensors::IMU_LINACC_Y_NOISE_METERS_PER_S_SQR:
+        msg1.mutable_linear_acceleration()->set_y(
+          keyNoise.second->Apply(
+            msg1.linear_acceleration().y()));
+        break;
+      case sensors::IMU_LINACC_Z_NOISE_METERS_PER_S_SQR:
+        msg1.mutable_linear_acceleration()->set_z(
+          keyNoise.second->Apply(
+            msg1.linear_acceleration().z()));
+        break;
+      default:
+        std::ostringstream out;
+        out << "Removing unrecognized noise model: ";
+        keyNoise.second->Print(out);
+        out << std::endl;
+        gzwarn << out.str() << std::endl;
+        this->noises.erase(keyNoise.first);
+        break;
+    }
+  }
 
   msgs::IMU msg2;
   msgs::Set(msg2.mutable_stamp(), this->parentSensor->LastMeasurementTime());
